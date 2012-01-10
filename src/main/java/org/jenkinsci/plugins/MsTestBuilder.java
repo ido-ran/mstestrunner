@@ -1,108 +1,172 @@
 package org.jenkinsci.plugins;
-import hudson.EnvVars;
-import hudson.Launcher;
-import hudson.Extension;
-import hudson.FilePath;
-import hudson.Util;
-import hudson.util.FormValidation;
+
+import hudson.*;
 import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
-import hudson.model.AbstractProject;
 import hudson.model.Computer;
+import hudson.model.Descriptor;
 import hudson.tasks.Builder;
-import hudson.tasks.BuildStepDescriptor;
+import hudson.tools.ToolInstallation;
 import hudson.util.ArgumentListBuilder;
-import net.sf.json.JSONObject;
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.QueryParameter;
 
-import javax.servlet.ServletException;
 import java.io.IOException;
+import java.util.StringTokenizer;
 
 /**
- * Sample {@link Builder}.
- *
- * <p>
- * When the user configures the project and enables this builder,
- * {@link DescriptorImpl#newInstance(StaplerRequest)} is invoked
- * and a new {@link HelloWorldBuilder} is created. The created
- * instance is persisted to the project configuration XML by using
- * XStream, so this allows you to use instance fields (like {@link #name})
- * to remember the configuration.
- *
- * <p>
- * When a build is performed, the {@link #perform(AbstractBuild, Launcher, BuildListener)}
- * method will be invoked. 
- *
- * @author Kohsuke Kawaguchi
+ * @author Ido Ran
  */
 public class MsTestBuilder extends Builder {
 
-    private final String name;
-
-    // Fields in config.jelly must match the parameter names in the "DataBoundConstructor"
-    @DataBoundConstructor
-    public MsTestBuilder(String name) {
-        this.name = name;
-    }
+    /**
+     * GUI fields
+     */
+    private final String msTestName;
+    private final String testFiles;
+    private final String categories;
+    private final String resultFile;
+    private final String cmdLineArgs;
 
     /**
-     * We'll use this from the <tt>config.jelly</tt>.
+     * When this builder is created in the project configuration step,
+     * the builder object will be created from the strings below.
+     *
+     * @param msTestName The MSTest logical name
+     * @param testFiles The path of the test files
+     * @param cmdLineArgs Whitespace separated list of command line arguments
      */
-    public String getName() {
-        return name;
+    @DataBoundConstructor
+    @SuppressWarnings("unused")
+    public MsTestBuilder(String msTestName, String testFiles,
+            String categories, String resultFile, String cmdLineArgs) {
+        this.msTestName = msTestName;
+        this.testFiles = testFiles;
+        this.categories = categories;
+        this.resultFile = resultFile;
+        this.cmdLineArgs = cmdLineArgs;
+    }
+
+    @SuppressWarnings("unused")
+    public String getCmdLineArgs() {
+        return cmdLineArgs;
+    }
+
+    @SuppressWarnings("unused")
+    public String getTestFiles() {
+        return testFiles;
+    }
+
+    @SuppressWarnings("unused")
+    public String getCategories() {
+        return categories;
+    }
+
+    @SuppressWarnings("unused")
+    public String getResultFile() {
+        return resultFile;
+    }
+
+    @SuppressWarnings("unused")
+    public String getMsTestName() {
+        return msTestName;
+    }
+
+    public MsTestInstallation getMsTest() {
+        for (MsTestInstallation i : DESCRIPTOR.getInstallations()) {
+            if (msTestName != null && i.getName().equals(msTestName)) {
+                return i;
+            }
+        }
+        return null;
     }
 
     @Override
-    public boolean perform(AbstractBuild build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
+    public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
         ArgumentListBuilder args = new ArgumentListBuilder();
 
-        String execName = "msbuild.exe";
-        MsBuildInstallation ai = getMsTest();
-        if (ai == null) {
+        String execName = "mstest.exe";
+        MsTestInstallation installation = getMsTest();
+        if (installation == null) {
             listener.getLogger().println("Path To MSTest.exe: " + execName);
             args.add(execName);
         } else {
             EnvVars env = build.getEnvironment(listener);
-            ai = ai.forNode(Computer.currentComputer().getNode(), listener);
-            ai = ai.forEnvironment(env);
-            String pathToMsBuild = ai.getHome();
-            FilePath exec = new FilePath(launcher.getChannel(), pathToMsBuild);
+            installation = installation.forNode(Computer.currentComputer().getNode(), listener);
+            installation = installation.forEnvironment(env);
+            String pathToMsTest = installation.getHome();
+            FilePath exec = new FilePath(launcher.getChannel(), pathToMsTest);
             try {
                 if (!exec.exists()) {
-                    listener.fatalError(pathToMsBuild + " doesn't exist");
+                    listener.fatalError(pathToMsTest + " doesn't exist");
                     return false;
                 }
             } catch (IOException e) {
-                listener.fatalError("Failed checking for existence of " + pathToMsBuild);
+                listener.fatalError("Failed checking for existence of " + pathToMsTest);
                 return false;
             }
-            listener.getLogger().println("Path To MSBuild.exe: " + pathToMsBuild);
-            args.add(pathToMsBuild);
+            listener.getLogger().println("Path To MSTest.exe: " + pathToMsTest);
+            args.add(pathToMsTest);
 
-            if (ai.getDefaultArgs() != null) {
-                args.addTokenized(ai.getDefaultArgs());
+            if (installation.getDefaultArgs() != null) {
+                args.addTokenized(installation.getDefaultArgs());
             }
         }
+        
+        if (resultFile == null || resultFile.trim().length() == 0) {
+            listener.fatalError("Result file name was not specified");
+            return false;
+        }
+        
+        // Delete old result file
+        FilePath resultFilePath = new FilePath(launcher.getChannel(), resultFile);
+        if (resultFilePath.exists()) {
+            listener.getLogger().println("Delete old result file " + resultFilePath.toURI().toString());
+            try {
+                resultFilePath.delete();
+            } catch (IOException ex) {
+                ex.printStackTrace(listener.fatalError("Fail to delete old result file"));
+                return false;
+            } catch (InterruptedException ex) {
+                ex.printStackTrace(listener.fatalError("Fail to delete old result file"));
+                return false;
+            }
+        }
+        
+        args.add("/resultsfile:" + resultFile);
+        
+        // Always use noisolation flag
+        args.add("/noisolation");
 
         EnvVars env = build.getEnvironment(listener);
         String normalizedArgs = cmdLineArgs.replaceAll("[\t\r\n]+", " ");
         normalizedArgs = Util.replaceMacro(normalizedArgs, env);
         normalizedArgs = Util.replaceMacro(normalizedArgs, build.getBuildVariables());
-        if (normalizedArgs.trim().length() > 0)
+        if (normalizedArgs.trim().length() > 0) {
             args.addTokenized(normalizedArgs);
+        }
 
-        args.addKeyValuePairs("/P:", build.getBuildVariables());
+        // TODO: How to add build variables?
+        //args.addKeyValuePairs("/P:", build.getBuildVariables());
 
-        //If a msbuild file is specified, then add it as an argument, otherwise
-        //msbuild will search for any file that ends in .proj or .sln
-        if (msBuildFile != null && msBuildFile.trim().length() > 0) {
-            String normalizedFile = msBuildFile.replaceAll("[\t\r\n]+", " ");
-            normalizedFile = Util.replaceMacro(normalizedFile, env);
-            normalizedFile = Util.replaceMacro(normalizedFile, build.getBuildVariables());
-            if (normalizedFile.length() > 0)
-                args.add(normalizedFile);
+        if (categories != null && categories.trim().length() > 0) {
+            args.add("/category:" + categories.trim());
+        }
+
+        // if no test files are specified fail the build.
+        if (testFiles == null || testFiles.trim().length() == 0) {
+            listener.fatalError("No test files are specified");
+            return false;
+        }
+
+        StringTokenizer testFilesToknzr = new StringTokenizer(testFiles, " \t\r\n");
+        while (testFilesToknzr.hasMoreTokens()) {
+            String testFile = testFilesToknzr.nextToken();
+            testFile = Util.replaceMacro(testFile, env);
+            testFile = Util.replaceMacro(testFile, build.getBuildVariables());
+
+            if (testFile.length() > 0) {
+                args.add("/testcontainer:" + testFile);
+            }
         }
 
         if (!launcher.isUnix()) {
@@ -116,88 +180,49 @@ public class MsTestBuilder extends Builder {
             return r == 0;
         } catch (IOException e) {
             Util.displayIOException(e, listener);
-            e.printStackTrace(listener.fatalError("command execution failed"));
+            e.printStackTrace(listener.fatalError("MSTest command execution failed"));
             return false;
         }
     }
 
-    // Overridden for better type safety.
-    // If your plugin doesn't really define any property on Descriptor,
-    // you don't have to do this.
     @Override
-    public DescriptorImpl getDescriptor() {
-        return (DescriptorImpl)super.getDescriptor();
+    public Descriptor<Builder> getDescriptor() {
+        return DESCRIPTOR;
     }
-
-    private MsBuildInstallation getMsTestgetMsTest() {
-        throw new UnsupportedOperationException("Not yet implemented");
-    }
-
     /**
-     * Descriptor for {@link HelloWorldBuilder}. Used as a singleton.
-     * The class is marked as public so that it can be accessed from views.
-     *
-     * <p>
-     * See <tt>src/main/resources/hudson/plugins/hello_world/HelloWorldBuilder/*.jelly</tt>
-     * for the actual HTML fragment for the configuration screen.
+     * Descriptor should be singleton.
      */
-    @Extension // This indicates to Jenkins that this is an implementation of an extension point.
-    public static final class DescriptorImpl extends BuildStepDescriptor<Builder> {
-        /**
-         * To persist global configuration information,
-         * simply store it in a field and call save().
-         *
-         * <p>
-         * If you don't want fields to be persisted, use <tt>transient</tt>.
-         */
-        private boolean useFrench;
+    @Extension
+    public static final DescriptorImpl DESCRIPTOR = new DescriptorImpl();
 
-        /**
-         * Performs on-the-fly validation of the form field 'name'.
-         *
-         * @param value
-         *      This parameter receives the value that the user has typed.
-         * @return
-         *      Indicates the outcome of the validation. This is sent to the browser.
-         */
-        public FormValidation doCheckName(@QueryParameter String value)
-                throws IOException, ServletException {
-            if (value.length() == 0)
-                return FormValidation.error("Please set a name");
-            if (value.length() < 4)
-                return FormValidation.warning("Isn't the name too short?");
-            return FormValidation.ok();
+    public static final class DescriptorImpl extends Descriptor<Builder> {
+
+        @CopyOnWrite
+        private volatile MsTestInstallation[] installations = new MsTestInstallation[0];
+
+        DescriptorImpl() {
+            super(MsTestBuilder.class);
+            load();
         }
 
-        public boolean isApplicable(Class<? extends AbstractProject> aClass) {
-            // Indicates that this builder can be used with all kinds of project types 
-            return true;
-        }
-
-        /**
-         * This human readable name is used in the configuration screen.
-         */
         public String getDisplayName() {
-            return "Say hello world";
+            return "Run unit tests with MSTest";
         }
 
-        @Override
-        public boolean configure(StaplerRequest req, JSONObject formData) throws FormException {
-            // To persist global configuration information,
-            // set that to properties and call save().
-            useFrench = formData.getBoolean("useFrench");
-            // ^Can also use req.bindJSON(this, formData);
-            //  (easier when there are many fields; need set* methods for this, like setUseFrench)
+        public MsTestInstallation[] getInstallations() {
+            return installations;
+        }
+
+        public void setInstallations(MsTestInstallation... antInstallations) {
+            this.installations = antInstallations;
             save();
-            return super.configure(req,formData);
         }
 
         /**
-         * This method returns true if the global configuration says we should speak French.
+         * Obtains the {@link MsTestInstallation.DescriptorImpl} instance.
          */
-        public boolean useFrench() {
-            return useFrench;
+        public MsTestInstallation.DescriptorImpl getToolDescriptor() {
+            return ToolInstallation.all().get(MsTestInstallation.DescriptorImpl.class);
         }
     }
 }
-

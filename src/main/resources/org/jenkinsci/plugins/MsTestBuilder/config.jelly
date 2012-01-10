@@ -1,0 +1,25 @@
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout"
+         xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+
+    <f:entry title="MsTest Version">
+        <select class="setting-input" name="MsTestBuilder.msTestName">
+            <option>(Default)</option>
+            <j:forEach var="inst" items="${descriptor.installations}">
+                <f:option selected="${inst.name==instance.MsTestName}">${inst.name}</f:option>
+            </j:forEach>
+        </select>
+    </f:entry>
+
+    <f:entry title="MsTest Test Files">
+        <f:textbox name="MsTestBuilder.testFiles" value="${instance.testFiles}"/>
+    </f:entry>
+    <f:entry title="Test Categories">
+        <f:textbox name="MsTestBuilder.categories" value="${instance.categories}" />
+    </f:entry>
+    <f:entry title="Result File">
+        <f:textbox name="MsTestBuilder.resultFile" value="${instance.resultFile}" />
+    </f:entry>
+    <f:entry title="Command Line Arguments">
+        <f:textbox name="MsTestBuilder.cmdLineArgs" value="${instance.cmdLineArgs}"/>
+    </f:entry>
+</j:jelly>
