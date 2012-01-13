@@ -84,6 +84,7 @@ public class MsTestBuilder extends Builder {
     public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
         ArgumentListBuilder args = new ArgumentListBuilder();
 
+        // Build MSTest.exe path.
         String execName = "mstest.exe";
         MsTestInstallation installation = getMsTest();
         if (installation == null) {
@@ -118,8 +119,10 @@ public class MsTestBuilder extends Builder {
         }
         
         // Delete old result file
-        FilePath resultFilePath = new FilePath(launcher.getChannel(), resultFile);
-        if (resultFilePath.exists()) {
+        FilePath resultFilePath = build.getWorkspace().child(resultFile);
+        if (!resultFilePath.exists()) {
+            listener.getLogger().println("Result file was not found so no action has been taken. " + resultFilePath.toURI());
+        } else {
             listener.getLogger().println("Delete old result file " + resultFilePath.toURI().toString());
             try {
                 resultFilePath.delete();
@@ -132,11 +135,13 @@ public class MsTestBuilder extends Builder {
             }
         }
         
+        // Add result file argument
         args.add("/resultsfile:" + resultFile);
         
         // Always use noisolation flag
         args.add("/noisolation");
 
+        // Add command line arguments
         EnvVars env = build.getEnvironment(listener);
         String normalizedArgs = cmdLineArgs.replaceAll("[\t\r\n]+", " ");
         normalizedArgs = Util.replaceMacro(normalizedArgs, env);
@@ -145,7 +150,7 @@ public class MsTestBuilder extends Builder {
             args.addTokenized(normalizedArgs);
         }
 
-        // TODO: How to add build variables?
+        // TODO: How and if to add build variables?
         //args.addKeyValuePairs("/P:", build.getBuildVariables());
 
         if (categories != null && categories.trim().length() > 0) {
@@ -158,6 +163,7 @@ public class MsTestBuilder extends Builder {
             return false;
         }
 
+        // Add test containers to command line
         StringTokenizer testFilesToknzr = new StringTokenizer(testFiles, " \t\r\n");
         while (testFilesToknzr.hasMoreTokens()) {
             String testFile = testFilesToknzr.nextToken();
@@ -174,7 +180,7 @@ public class MsTestBuilder extends Builder {
             args.add("&&", "exit", "%%ERRORLEVEL%%");
         }
 
-        listener.getLogger().println("Executing command: " + args.toStringWithQuote());
+        listener.getLogger().println("Executing MSTest: " + args.toStringWithQuote());
         try {
             int r = launcher.launch().cmds(args).envs(env).stdout(listener).pwd(build.getModuleRoot()).join();
             return r == 0;

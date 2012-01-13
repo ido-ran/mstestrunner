@@ -10,13 +10,13 @@
         </select>
     </f:entry>
 
-    <f:entry title="MsTest Test Files">
-        <f:textbox name="MsTestBuilder.testFiles" value="${instance.testFiles}"/>
+    <f:entry title="Test Files">
+        <f:textbox name="MsTestBuilder.testFiles" field="testFiles" value="${instance.testFiles}"/>
     </f:entry>
     <f:entry title="Test Categories">
         <f:textbox name="MsTestBuilder.categories" value="${instance.categories}" />
     </f:entry>
-    <f:entry title="Result File">
+    <f:entry title="Result File Name">
         <f:textbox name="MsTestBuilder.resultFile" value="${instance.resultFile}" />
     </f:entry>
     <f:entry title="Command Line Arguments">
