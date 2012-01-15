@@ -154,7 +154,7 @@ public class MsTestBuilder extends Builder {
         //args.addKeyValuePairs("/P:", build.getBuildVariables());
 
         if (categories != null && categories.trim().length() > 0) {
-            args.add("/category:" + categories.trim());
+            args.add("/category:\"" + categories.trim() + "\"");
         }
 
         // if no test files are specified fail the build.

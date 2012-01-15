@@ -1,0 +1,31 @@
+<div>
+    <p>
+        Optional field, if you do not enter all test will run.
+        If entered specify the test categories to run.
+        You can use logical operators like:
+
+    <table>
+        <thead>
+        <td>Cateogry Filter</td><td>Result</td>
+        </thead>
+        <tr>
+            <td>Priority1</td><td>Any test with category Priority1</td>
+        </tr>
+        <tr>
+            <td>Priority1&amp;SpeedTest</td><td>Test that have both Priority1 and SpeedTest categories</td>
+        </tr>
+        <tr>
+            <td>Priority1|SpeedTest</td><td>Tests that have either Priority1 or SpeedTest categories</td>
+        </tr>
+        <tr>
+            <td>Priority1&amp;!SpeedTest</td><td>Test that have Priority1 category and also do not have SpeedTest category.</td>
+        </tr>
+    </table>
+
+</p>
+</div>
+<div>
+    <p>
+        Command Line Argument: <span style="font-weight: bold">/category</span>
+    </p>
+</div>

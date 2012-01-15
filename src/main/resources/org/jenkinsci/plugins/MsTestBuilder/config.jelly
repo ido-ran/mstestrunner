@@ -10,16 +10,16 @@
         </select>
     </f:entry>
 
-    <f:entry title="Test Files">
-        <f:textbox name="MsTestBuilder.testFiles" field="testFiles" value="${instance.testFiles}"/>
+    <f:entry title="Test Files" field="testFiles">
+        <f:expandableTextbox name="MsTestBuilder.testFiles" value="${instance.testFiles}"/>
     </f:entry>
-    <f:entry title="Test Categories">
+    <f:entry title="Test Categories" field="categories">
         <f:textbox name="MsTestBuilder.categories" value="${instance.categories}" />
     </f:entry>
-    <f:entry title="Result File Name">
+    <f:entry title="Result File Name" field="resultFile">
         <f:textbox name="MsTestBuilder.resultFile" value="${instance.resultFile}" />
     </f:entry>
-    <f:entry title="Command Line Arguments">
+    <f:entry title="Command Line Arguments" field="CmdLineArgs">
         <f:textbox name="MsTestBuilder.cmdLineArgs" value="${instance.cmdLineArgs}"/>
     </f:entry>
 </j:jelly>
